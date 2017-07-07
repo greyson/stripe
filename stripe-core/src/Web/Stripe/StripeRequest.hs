@@ -67,8 +67,8 @@ import           Web.Stripe.Types   (AccountBalance(..), AccountNumber(..),
                                      RefundId(..),
                                      RefundApplicationFee(..), RefundReason(..),
                                      RoutingNumber(..), StartingAfter(..),
-                                     StatementDescription(..), Source(..),
-                                     SubscriptionId(..), TaxID(..), 
+                                     StatementDescription(..), TxnSource(..),
+                                     SubscriptionId(..), TaxID(..),
                                      TaxPercent(..), TimeRange(..),
                                      TokenId(..), TransactionId(..),
                                      TransactionType(..), TransferId(..),
@@ -362,8 +362,8 @@ instance ToStripeParam RecipientType where
   toStripeParam recipientType =
     (("type", toBytestring recipientType) :)
 
-instance ToStripeParam a => ToStripeParam (Source a) where
-  toStripeParam (Source param) =
+instance ToStripeParam a => ToStripeParam (TxnSource a) where
+  toStripeParam (TxnSource param) =
     case toStripeParam param [] of
       [(_, p)] -> (("source", p) :)
       _        -> error "source applied to non-singleton"

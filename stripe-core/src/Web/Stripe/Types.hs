@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies         #-}
 {-# LANGUAGE UndecidableInstances #-}
 ------------------------------------------------------------------------------
--- | 
+-- |
 -- Module      : Web.Stripe.Types
 -- Copyright   : (c) David Johnson, 2014
 -- Maintainer  : djohnson.m@gmail.com
@@ -20,11 +20,11 @@ import           Control.Applicative (pure, (<$>), (<*>), (<|>))
 import           Control.Monad       (mzero)
 import           Data.Aeson          (FromJSON (parseJSON), ToJSON(..),
                                       Value (String, Object, Bool), (.:),
-                                      (.:?))
+                                      (.:?), withObject, withText)
 import           Data.Data           (Data, Typeable)
 import qualified Data.HashMap.Strict as H
 import           Data.Ratio          ((%))
-import           Data.Text           (Text)
+import           Data.Text           (Text, unpack)
 import           Data.Time           (UTCTime)
 import           Numeric             (fromRat, showFFloat)
 import           Text.Read           (lexP, pfail)
@@ -256,6 +256,7 @@ data Customer = Customer {
     , customerCards          :: StripeList Card
     , customerCurrency       :: Maybe Currency
     , customerDefaultCard    :: Maybe (Expandable CardId)
+    , customerDefaultSource  :: Maybe SourceId
     , customerMetaData       :: MetaData
     } | DeletedCustomer {
       deletedCustomer   :: Maybe Bool
@@ -280,6 +281,7 @@ instance FromJSON Customer where
            <*> o .: "cards"
            <*> o .:? "currency"
            <*> o .:? "default_card"
+           <*> (fmap SourceId <$> o .:? "default_source")
            <*> o .: "metadata"
            <|> DeletedCustomer
            <$> o .: "deleted"
@@ -1379,6 +1381,53 @@ instance FromJSON Recipient where
    parseJSON _ = mzero
 
 ------------------------------------------------------------------------------
+-- | `Source` for a `Customer` funding source
+data StripeSource = StripeSource {
+      sourceId       :: SourceId
+    , sourceType     :: SourceType
+    , sourceCard     :: Maybe SourceCard
+    , sourceMetaData :: MetaData
+} deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+instance FromJSON StripeSource where
+  parseJSON = withObject "Source" $ \o ->
+    StripeSource <$> (SourceId <$> o .: "id")
+                 <*> o .: "type"
+                 <*> o .:? "card"
+                 <*> o .: "metadata"
+
+newtype SourceId = SourceId Text
+  deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+data SourceType = SourceCardType
+  deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+instance FromJSON SourceType where
+  parseJSON = withText "SourceType" $ \t ->
+    case t of
+      "card" -> return SourceCardType
+      other -> fail $ "Unknown source type: " ++ unpack other
+
+data SourceCard = SourceCard {
+      sourceCardLastFour    :: Text
+    , sourceCardBrand       :: Brand
+    , sourceCardFunding     :: Text
+    , sourceCardExpMonth    :: ExpMonth
+    , sourceCardExpYear     :: ExpYear
+    , sourceCardFingerprint :: Text
+    -- And many more
+} deriving (Read, Show, Eq, Ord, Data, Typeable)
+
+instance FromJSON SourceCard where
+  parseJSON = withObject "SourceCard" $ \o ->
+    SourceCard <$> o .: "last4"
+               <*> o .: "brand"
+               <*> o .: "funding"
+               <*> (ExpMonth <$> o .: "exp_month")
+               <*> (ExpYear <$> o .: "exp_year")
+               <*> o .: "fingerprint"
+
+------------------------------------------------------------------------------
 -- | `PlanId` for a `Plan`
 newtype ApplicationFeeId = ApplicationFeeId Text deriving (Read, Show, Eq, Ord, Data, Typeable)
 
@@ -1631,7 +1680,7 @@ instance FromJSON FeeDetails where
 ------------------------------------------------------------------------------
 -- | `Source` used for filtering `Balance` transactions. It should contain
 -- an object Id such as a `ChargeId`
-newtype Source a = Source { getSource :: a }
+newtype TxnSource a = TxnSource { getSource :: a }
     deriving (Read, Show, Eq, Ord, Data, Typeable)
 
 ------------------------------------------------------------------------------
@@ -2384,7 +2433,7 @@ data BitcoinReceiver = BitcoinReceiver {
     ,  btcMetadata              :: MetaData
     ,  btcRefundAddress         :: Maybe Text
     ,  btcTransactions          :: Maybe Transactions
-    ,  btcPayment               :: Maybe PaymentId 
+    ,  btcPayment               :: Maybe PaymentId
     ,  btcCustomer              :: Maybe CustomerId
     } deriving (Show, Eq)
 
@@ -2393,23 +2442,23 @@ data BitcoinReceiver = BitcoinReceiver {
 instance FromJSON BitcoinReceiver where
    parseJSON (Object o) =
      BitcoinReceiver <$> (BitcoinReceiverId <$> o .: "id")
-                     <*> o .: "object"  
-                     <*> (fromSeconds <$> o .: "created") 
-                     <*> o .: "livemode"  
-                     <*> o .: "active"  
-                     <*> o .: "amount"  
-                     <*> o .: "amount_received"  
-                     <*> o .: "bitcoin_amount"  
-                     <*> o .: "bitcoin_amount_received"  
-                     <*> o .: "bitcoin_uri"  
-                     <*> o .: "currency"  
-                     <*> o .: "filled"  
-                     <*> o .: "inbound_address"  
-                     <*> o .: "uncaptured_funds"  
-                     <*> o .:? "description"  
-                     <*> o .: "email"  
+                     <*> o .: "object"
+                     <*> (fromSeconds <$> o .: "created")
+                     <*> o .: "livemode"
+                     <*> o .: "active"
+                     <*> o .: "amount"
+                     <*> o .: "amount_received"
+                     <*> o .: "bitcoin_amount"
+                     <*> o .: "bitcoin_amount_received"
+                     <*> o .: "bitcoin_uri"
+                     <*> o .: "currency"
+                     <*> o .: "filled"
+                     <*> o .: "inbound_address"
+                     <*> o .: "uncaptured_funds"
+                     <*> o .:? "description"
+                     <*> o .: "email"
                      <*> (MetaData . H.toList <$> o .: "metadata")
-                     <*> o .:? "refund_address"  
+                     <*> o .:? "refund_address"
                      <*> o .:? "transactions"
                      <*> (fmap PaymentId <$> o .:? "payment")
                      <*> (fmap CustomerId <$> o .:? "customer")
@@ -2429,11 +2478,11 @@ data Transactions = Transactions {
 -- | Bitcoin Transactions data
 instance FromJSON Transactions where
    parseJSON (Object o) =
-     Transactions <$> o .: "object"  
-                  <*> o .: "total_count"  
-                  <*> o .: "has_more"  
-                  <*> o .: "url"  
-                  <*> o .: "data"  
+     Transactions <$> o .: "object"
+                  <*> o .: "total_count"
+                  <*> o .: "has_more"
+                  <*> o .: "url"
+                  <*> o .: "data"
    parseJSON _ = mzero
 
 ------------------------------------------------------------------------------

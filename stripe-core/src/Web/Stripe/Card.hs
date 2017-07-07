@@ -110,7 +110,8 @@ import           Web.Stripe.Types         (AddressLine1(..), AddressLine2(..)
                                           , RecipientId(..), RecipientCardId(..)
                                           , StartingAfter(..)
                                           , StripeDeleteResult(..)
-                                          , StripeList(..), TokenId(..), URL)
+                                          , StripeList(..), TokenId(..), URL
+                                          , StripeSource(..))
 import           Web.Stripe.Types.Util    (getCustomerId, getRecipientId)
 
 ------------------------------------------------------------------------------
@@ -140,7 +141,7 @@ createCustomerCardByToken
     createCardByToken "customers" (getCustomerId customerid) tokenid
 
 data CreateCustomerCardByToken
-type instance StripeReturn CreateCustomerCardByToken = Card
+type instance StripeReturn CreateCustomerCardByToken = StripeSource
 
 ------------------------------------------------------------------------------
 -- | `Recipient` `Card` creation from a `TokenId`
