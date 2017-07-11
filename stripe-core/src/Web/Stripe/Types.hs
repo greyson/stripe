@@ -20,7 +20,7 @@ import           Control.Applicative (pure, (<$>), (<*>), (<|>))
 import           Control.Monad       (mzero)
 import           Data.Aeson          (FromJSON (parseJSON), ToJSON(..),
                                       Value (String, Object, Bool), (.:),
-                                      (.:?), withObject, withText)
+                                      (.:?), withObject, withText, (.!=))
 import           Data.Data           (Data, Typeable)
 import qualified Data.HashMap.Strict as H
 import           Data.Ratio          ((%))
@@ -1390,11 +1390,19 @@ data StripeSource = StripeSource {
 } deriving (Read, Show, Eq, Ord, Data, Typeable)
 
 instance FromJSON StripeSource where
-  parseJSON = withObject "Source" $ \o ->
-    StripeSource <$> (SourceId <$> o .: "id")
-                 <*> o .: "type"
-                 <*> o .:? "card"
-                 <*> o .: "metadata"
+  parseJSON = withObject "Source" $ \o -> do
+    objecttype <- o .: "object"
+    case objecttype of
+      "card" -> StripeSource <$> (SourceId <$> o .: "id")
+                             <*> pure SourceCardType
+                             <*> (Just <$> parseJSON (Object o))
+                             <*> o .: "metadata"
+      "token" ->
+        StripeSource <$> (SourceId <$> o .: "id")
+                     <*> o .: "type"
+                     <*> o .:? "card"
+                     <*> o .:? "metadata" .!= MetaData []
+      other -> fail $ "Unknown source type: " ++ unpack other
 
 newtype SourceId = SourceId Text
   deriving (Read, Show, Eq, Ord, Data, Typeable)
