@@ -254,6 +254,7 @@ data Customer = Customer {
     , customerDiscount       :: Maybe Discount
     , customerAccountBalance :: Int
     , customerCards          :: StripeList Card
+    , customerSources        :: StripeList StripeSource
     , customerCurrency       :: Maybe Currency
     , customerDefaultCard    :: Maybe (Expandable CardId)
     , customerDefaultSource  :: Maybe SourceId
@@ -279,6 +280,7 @@ instance FromJSON Customer where
            <*> o .:? "discount"
            <*> o .: "account_balance"
            <*> o .: "cards"
+           <*> o .:? "sources" .!= StripeList [] "" "source" (Just 0) False
            <*> o .:? "currency"
            <*> o .:? "default_card"
            <*> (fmap SourceId <$> o .:? "default_source")
